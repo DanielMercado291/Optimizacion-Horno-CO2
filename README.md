@@ -4,7 +4,7 @@ Este repositorio contiene la arquitectura modular y el núcleo predictivo avanza
 
 ---
 
-## 📋 Descripción de la Arquitectura de Doble Capa
+##  Descripción de la Arquitectura de Doble Capa
 
 Atendiendo las observaciones de validación experimental y diseño metodológico, el prototipo técnico fue reorganizado como un sistema integrado de dos capas operacionales:
 
@@ -13,7 +13,7 @@ Atendiendo las observaciones de validación experimental y diseño metodológico
 
 ---
 
-## 💻 Validación Experimental y Separación Temporal (Científica)
+##  Validación Experimental y Separación Temporal (Científica)
 
 Para erradicar por completo el sobreajuste (*overfitting*) por memorización de datos, se aplicó una ordenación cronológica estricta (`df.sort_index()`) sobre las **31,455 filas válidas** extraídas del SCADA, dividiendo el dataset en bloques temporales independientes:
 *   **Set de Entrenamiento (70%):** 22,018 muestras (Mapeo histórico del proceso).
@@ -38,7 +38,7 @@ Los siguientes datos corresponden a las métricas estandarizadas globales de los
 
 ---
 
-## 🎯 Resultados de la Optimización y Recomendación Operativa (Modo Sombra)
+##  Resultados de la Optimización y Recomendación Operativa (Modo Sombra)
 
 Tomando como referencia un punto histórico óptimo (\(O_2 = 2.75\%\), \(NO = 482.5\text{ ppm}\)) y aplicando restricciones duras mediante penalizaciones en la función objetivo, la capa de Evolución Diferencial arrojó las siguientes **Recomendaciones en Modo Sombra para el operador**:
 
@@ -49,14 +49,14 @@ Tomando como referencia un punto histórico óptimo (\(O_2 = 2.75\%\), \(NO = 48
 *   **VTI Precalentador (`SI_530201.MCO`):** 569.97
 *   **VTI Enfriador (`SI_566701.MCO`):** 206.67
 
-### 📈 Emisiones y Consumos Físicos Predichos bajo estos Setpoints:
+###  Emisiones y Consumos Físicos Predichos bajo estos Setpoints:
 *   **Potencia Motor Principal (`JI_541101.MCO`) = 203.28 kW** (Cumple la restricción mecánica de \(\le\) 230 kW).
 *   **CO Chimenea (`AI_540501A.MCO`) = 0.009%** (Garantiza combustión completa, cumpliendo la meta de \(\le\) 0.05%).
 *   **O2 Chimenea (`AI_540501D.MCO`) = 3.01%** (Exceso de aire minimizado al límite técnico de \(\le\) 3%, reduciendo directamente las pérdidas de calor y optimizando el ahorro de carbón para mitigar el CO2).
 
 ---
 
-## 💡 Conclusiones y Justificación de Infraestructura
+##  Conclusiones y Justificación de Infraestructura
 
 1.  **Justificación de Modelos Nativos del Hub:** Tras auditar el catálogo público de Hugging Face bajo la tarea `tabular-regression`, se verificó la ausencia de arquitecturas preentrenadas capaces de modelar la telemetría específica de este horno industrial. Se justifica el uso de la especificación oficial "Scikit-In-HuggingFace" para entrenar e instrumentar algoritmos robustos basados en árboles desde cero.
 2.  **Mitigación Total de Fugas de Datos:** Al estructurar la regresión multi-salida con retrasos temporales e implementar la división cronológica por bloques independientes, las métricas obtenidas reflejan fielmente la capacidad de operación del sistema ante datos totalmente invisibles, listos para un entorno productivo.
