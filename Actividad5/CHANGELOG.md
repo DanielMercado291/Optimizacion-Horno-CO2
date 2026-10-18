@@ -1,6 +1,9 @@
-# Changelog
+# Registro de cambios
 
-## v1.0.0 - 2026-10-17
-- Estructura modular completada con carpetas datos_ini, datos_limp y fuentes.
-- Dataset original de sensores cargado y filtrado.
-- Registro estandarizado de experimentos en ejecucion de MLflow.
+## v2.0.0 - 2026-10-17
+- Cambio estructural del dataset.
+- Se agrega integracion con MLflow.
+
+## v1.1.0 - 2026-10-15
+- Se agrega registro de datos base.
+- Validacion de consistencia en variables.
