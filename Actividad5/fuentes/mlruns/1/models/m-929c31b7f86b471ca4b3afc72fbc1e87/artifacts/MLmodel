@@ -1,0 +1,23 @@
+artifact_path: file:C:/Users/damercado/OneDrive - CEMEX/Escritorio/Proyecto IA/Optimizacion-Horno-CO2/Actividad5/fuentes/mlruns/1/models/m-929c31b7f86b471ca4b3afc72fbc1e87/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.14.6
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: pickle
+    sklearn_version: 1.9.0
+    skops_trusted_types: null
+mlflow_version: 3.17.1
+model_id: m-929c31b7f86b471ca4b3afc72fbc1e87
+model_size_bytes: 191330
+model_uuid: m-929c31b7f86b471ca4b3afc72fbc1e87
+prompts: null
+run_id: ed21adff703840b7a3118b785cb0a6cb
+utc_time_created: '2026-10-19 03:27:43.102701'
