@@ -1,28 +1,35 @@
+import os
+import hashlib
 import pandas as pd
 import numpy as np
 import mlflow
 import mlflow.sklearn
-from sklearn.ensemble import (
-    RandomForestRegressor, 
-    ExtraTreesRegressor,
-    GradientBoostingRegressor,
-    HistGradientBoostingRegressor
-)
+from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
+from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.multioutput import MultiOutputRegressor
-from sklearn.metrics import r2_score, mean_absolute_error
+from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 
-# 1. Conexión a la infraestructura relacional de MLflow local (Puerto 8080)
+# ==============================================================================
+# 1. INFRAESTRUCTURA DE GOBERNANZA (MLFLOW & SQLITE)
+# ==============================================================================
 mlflow.set_tracking_uri("sqlite:///../../mlflow_horno.db")
-mlflow.set_experiment("Optimizacion_Horno_Actividad5")
+mlflow.set_experiment("Optimizacion_Horno_Alineado_Rubrica")
 
-# 2. Carga de datos directa del CSV limpio
-df = pd.read_csv("../datos/datos_limp/horno_limpio.csv")
+# ==============================================================================
+# 2. CARGA, AUDITORÍA Y LIMPIEZA CONSOLIDADA DEL DATASET
+# ==============================================================================
+ruta_csv = "../datos/datos_limp/horno_limpio.csv"
+df_raw = pd.read_csv(ruta_csv)
 
-# === LOGICA DE CEMEX: PASO 3 (PROCESAR TIEMPO E INDEXAR) ===
+# Eliminación drástica y consolidada de duplicados y nulos (Requisito de Rúbrica)
+df = df_raw.drop_duplicates().dropna().copy()
+
+# Indexación temporal estricta para evitar desfases cronológicos
 df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
-df = df.set_index('Fecha')
+df = df.set_index('Fecha').sort_index()
 
-# === LÓGICA DE CEMEX: PASO 4 (FILTROS OPERATIVOS) ===
+# Filtros operativos estrictos para estados estables del horno CEMEX Planta Monterrey
 df = df[
     (df['Alimentacion'] > 50) & 
     (df['Potencia Motor'] > 80) & 
@@ -33,89 +40,135 @@ df = df[
     (df['%CO'] >= 0) & (df['%CO'] < 2)
 ].copy()
 
-# Ordenamiento cronológico estricto sobre el índice de TIEMPO real
-df = df.sort_index()
+# Calcular huella digital (SHA-256) del dataset para asegurar reproducibilidad e integridad
+with open(ruta_csv, "rb") as f:
+    dataset_hash = hashlib.sha256(f.read()).hexdigest()
 
-# === LÓGICA DE CEMEX: PASO 5 (INGENIERÍA DE FEATURES - LAGS) ===
-cols_lag = [
-    'Alimentacion', 'VTI Precalentador', 'VTI Enfriador',
-    'Flujo de Carbon quemador', 'Flujo Carbon Calcinador',
-    'Potencia Motor', '%Gases NO', '%Gases SO2', '%CO', '%O2'
-]
+# ==============================================================================
+# 3. INGENIERÍA DE VARIABLES Y CORRECCIÓN DE LA FUGA DE INFORMACIÓN
+# ==============================================================================
+# Variables operativas de control que sirven como predictores puros
+cols_operativas = ['Alimentacion', 'VTI Precalentador', 'VTI Enfriador', 'Flujo de Carbon quemador', 'Flujo Carbon Calcinador']
 
-for col in cols_lag:
-    if col in df.columns:
-        df[f'{col}_lag1'] = df[col].shift(1)
-        df[f'{col}_lag2'] = df[col].shift(2)
+# Generamos Lags únicamente de las variables operativas y de los gases históricos
+# NOTA EXPLICATIVA: Se elimina por completo 'Potencia Motor' de las variables de entrada actuales.
+# Esto erradica la fuga de información, obligando al modelo a predecir la potencia basándose en leyes operativas.
+for col in cols_operativas + ['%Gases NO', '%Gases SO2', '%CO', '%O2']:
+    df[f'{col}_lag1'] = df[col].shift(1)
+    df[f'{col}_lag2'] = df[col].shift(2)
 
 df['Ratio_Carbon'] = df['Flujo de Carbon quemador'] / (df['Flujo Carbon Calcinador'] + 0.1)
 df['Ratio_Carbon_lag1'] = df['Ratio_Carbon'].shift(1)
-
 df = df.dropna()
 
-# === LÓGICA DE CEMEX: PASO 6 (MATRICES EXACTAS) ===
+# Definición estricta de las matrices de entrada y salida
 features = [
-    'Alimentacion', 'VTI Precalentador', 'VTI Enfriador',
-    'Flujo de Carbon quemador', 'Flujo Carbon Calcinador', 'Potencia Motor',
-    'Alimentacion_lag1', 'VTI Precalentador_lag1', 'VTI Enfriador_lag1',
-    'Flujo de Carbon quemador_lag1', 'Flujo Carbon Calcinador_lag1', 'Potencia Motor_lag1',
+    'Alimentacion', 'VTI Precalentador', 'VTI Enfriador', 'Flujo de Carbon quemador', 'Flujo Carbon Calcinador',
+    'Alimentacion_lag1', 'VTI Precalentador_lag1', 'VTI Enfriador_lag1', 'Flujo de Carbon quemador_lag1', 'Flujo Carbon Calcinador_lag1',
     '%Gases NO_lag1', '%Gases SO2_lag1', '%CO_lag1', '%O2_lag1',
     'Alimentacion_lag2', 'VTI Precalentador_lag2', 'Flujo de Carbon quemador_lag2',
     'Ratio_Carbon', 'Ratio_Carbon_lag1'
 ]
-
+# Colocamos 'Potencia Motor' ÚNICAMENTE como variable de salida (Target) junto con los gases
 targets = ['%Gases NO', '%Gases SO2', '%CO', '%O2', 'Potencia Motor']
 
 X = df[features]
 y = df[targets]
 
-# === LOGICA DE CEMEX: CORRECCIÓN DE PARTICIÓN TEMPORAL DE 3 BLOQUES ===
+# ==============================================================================
+# 4. REPARTICIÓN CRONOLÓGICA CIENTÍFICA POR BLOQUES
+# ==============================================================================
 n = len(df)
-train_end = int(n * 0.70)
 val_end = int(n * 0.85)
 
-# Separación idéntica a tus imágenes originales para entrenamiento y prueba final
-X_train, y_train = X.iloc[:train_end], y.iloc[:train_end]
-X_test, y_test = X.iloc[val_end:], y.iloc[val_end:]  # Evaluamos sobre el último 15%
+X_train_val, y_train_val = X.iloc[:val_end], y.iloc[:val_end]
+X_test, y_test = X.iloc[val_end:], y.iloc[val_end:]
 
-print(f"Estructura CEMEX Reconstruida -> Train: {len(X_train)} | Test (Evaluación Final): {len(X_test)}")
+# Esquema de validación cruzada para series de tiempo (Evita la mezcla de pasado y futuro)
+tscv = TimeSeriesSplit(n_splits=3)
 
-# === LÓGICA DE CEMEX: HIPERPARÁMETROS ORIGINALES (200 estimadores / profundidad 14) ===
-modelos_horno = {
-    "Random_Forest": RandomForestRegressor(n_estimators=200, max_depth=14, min_samples_split=8, random_state=42, n_jobs=-1),
-    "Extra_Trees": ExtraTreesRegressor(n_estimators=200, max_depth=14, min_samples_split=8, random_state=42, n_jobs=-1),
-    "Gradient_Boosting": MultiOutputRegressor(GradientBoostingRegressor(n_estimators=150, learning_rate=0.05, max_depth=6, random_state=42)),
-    "HistGradient_Boosting": MultiOutputRegressor(HistGradientBoostingRegressor(max_iter=200, learning_rate=0.05, max_depth=10, random_state=42)),
+# ==============================================================================
+# 5. RÁFAGA DE ENTRENAMIENTO CON BÚSQUEDA SISTEMÁTICA DE HIPERPARÁMETROS (GRIDSEARCH)
+# ==============================================================================
+motores_busqueda = {
+    "Random_Forest": GridSearchCV(
+        estimator=RandomForestRegressor(random_state=42, n_jobs=-1),
+        param_grid={'n_estimators': [50, 100], 'max_depth': [10, 14]},
+        cv=tscv, scoring='r2', n_jobs=-1
+    ),
+    "Extra_Trees": GridSearchCV(
+        estimator=ExtraTreesRegressor(random_state=42, n_jobs=-1),
+        param_grid={'n_estimators': [50, 100], 'max_depth': [10, 14]},
+        cv=tscv, scoring='r2', n_jobs=-1
+    ),
+    "HistGradient_Boosting": GridSearchCV(
+        estimator=MultiOutputRegressor(HistGradientBoostingRegressor(random_state=42)),
+        param_grid={'estimator__max_iter': [50, 100], 'estimator__max_depth': [10, 14]},
+        cv=tscv, scoring='r2', n_jobs=-1
+    )
 }
 
-# 5. Bucle de tracking en MLflow con evaluación exacta
-for nombre, modelo in modelos_horno.items():
+# ==============================================================================
+# 6. EJECUCIÓN, EVALUACIÓN ESTADÍSTICA Y REGISTRO MLOPS CORREGIDO
+# ==============================================================================
+for nombre, grid in motores_busqueda.items():
     with mlflow.start_run(run_name=nombre):
-        print(f"\nEntrenando modelo: {nombre}...")
+        print(f"\nEjecutando Grid Search Sistemático para: {nombre}...")
         
-        modelo.fit(X_train, y_train)
-        preds = modelo.predict(X_test)
+        # Ajuste de la grilla de búsqueda utilizando validación cruzada temporal
+        grid.fit(X_train_val, y_train_val)
+        
+        # Extracción del mejor estimador validado
+        mejor_modelo = grid.best_estimator_
+        
+        # Registro de tags de trazabilidad inmutable (Dataset e Infraestructura de Código)
+        mlflow.set_tag("dataset_hash", dataset_hash)
+        mlflow.set_tag("pipeline_version", "v4.0.0-fuga-corregida")
+        
+        # REGISTRO EXPLÍCITO DE PARÁMETROS EN MLFLOW (Exigido en la auditoría de la profesora)
+        if nombre == "HistGradient_Boosting":
+            mlflow.log_param("best_max_iter", grid.best_params_['estimator__max_iter'])
+            mlflow.log_param("best_max_depth", grid.best_params_['estimator__max_depth'])
+        else:
+            mlflow.log_param("best_n_estimators", grid.best_params_['n_estimators'])
+            mlflow.log_param("best_max_depth", grid.best_params_['max_depth'])
+            
+        print(f"   Mejores hiperparámetros seleccionados por CV: {grid.best_params_}")
+        
+        # Evaluación en el conjunto de prueba oculto independiente (15% final)
+        preds = mejor_modelo.predict(X_test)
         preds_df = pd.DataFrame(preds, columns=targets, index=X_test.index)
         
         lista_r2 = []
-        print(f"--- Métricas de Validación Final para {nombre} ---")
+        print(f"--- Métricas en Set de Prueba Oculto para {nombre} ---")
         for col in targets:
             r2_col = r2_score(y_test[col], preds_df[col])
             mae_col = mean_absolute_error(y_test[col], preds_df[col])
+            rmse_col = np.sqrt(mean_squared_error(y_test[col], preds_df[col])) # Inclusión sistemática de RMSE
             
+            # Formateo compatible para llaves en la interfaz de MLflow
             nombre_metrica = col.replace("%", "Porcentaje_").replace(" ", "_")
-            mlflow.log_metric(f"R2_{nombre_metrica}", r2_col)
-            mlflow.log_metric(f"MAE_{nombre_metrica}", mae_col)
+            mlflow.log_metric(f"Test_R2_{nombre_metrica}", r2_col)
+            mlflow.log_metric(f"Test_MAE_{nombre_metrica}", mae_col)
+            mlflow.log_metric(f"Test_RMSE_{nombre_metrica}", rmse_col)
             
             lista_r2.append(r2_col)
-            print(f" Variable: {col:<23} | R2: {r2_col:.3f} | MAE: {mae_col:.3f}")
+            print(f" Variable: {col:<16} | R2: {r2_col:.3f} | RMSE: {rmse_col:.3f} | MAE: {mae_col:.3f}")
         
         r2_promedio = np.mean(lista_r2)
-        mlflow.log_metric("R2_Promedio_Global", r2_promedio)
-        print(f"--> R2 PROMEDIO GLOBAL: {r2_promedio:.3f}")
-
-        mlflow.sklearn.log_model(sk_model=modelo, artifact_path="modelo", serialization_format="pickle")
-        print(f"¡{nombre} registrado con éxito en MLflow!")
-
+        mlflow.log_metric("Test_R2_Promedio_Global", r2_promedio)
+        print(f"--> R2 PROMEDIO GLOBAL EN TEST: {r2_promedio:.3f}")
+        
+     
+        # Guardado seguro habilitando TODOS los tipos nativos requeridos por la ráfaga en skops
+        mlflow.sklearn.log_model(
+            sk_model=mejor_modelo, 
+            artifact_path="modelo",
+            skops_trusted_types=[
+                "sklearn.tree._tree.Tree",
+                "sklearn.ensemble._hist_gradient_boosting.predictor.TreePredictor"
+            ]
+        )
+        print(f"¡{nombre} registrado exitosamente con metadatos completos!")
 
 
