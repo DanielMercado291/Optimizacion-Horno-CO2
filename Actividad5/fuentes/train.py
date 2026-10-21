@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import mlflow
 import mlflow.sklearn
-from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
+from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, GradientBoostingRegressor
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
@@ -101,6 +101,11 @@ motores_busqueda = {
         param_grid={'n_estimators': [50, 100], 'max_depth': [10, 14]},
         cv=tscv, scoring='r2', n_jobs=-1
     ),
+        "Gradient_Boosting": GridSearchCV(
+        estimator=MultiOutputRegressor(GradientBoostingRegressor(random_state=42)),
+        param_grid={'estimator__n_estimators': [50, 100], 'estimator__max_depth': [5]},
+        cv=tscv, scoring='r2', n_jobs=-1
+    ),
     "HistGradient_Boosting": GridSearchCV(
         estimator=MultiOutputRegressor(HistGradientBoostingRegressor(random_state=42)),
         param_grid={'estimator__max_iter': [50, 100], 'estimator__max_depth': [10, 14]},
@@ -126,12 +131,17 @@ for nombre, grid in motores_busqueda.items():
         mlflow.set_tag("pipeline_version", "v4.0.0-fuga-corregida")
         
         # REGISTRO EXPLÍCITO DE PARÁMETROS EN MLFLOW (Exigido en la auditoría de la profesora)
+                # REGISTRO EXPLÍCITO DE PARÁMETROS EN MLFLOW
         if nombre == "HistGradient_Boosting":
             mlflow.log_param("best_max_iter", grid.best_params_['estimator__max_iter'])
+            mlflow.log_param("best_max_depth", grid.best_params_['estimator__max_depth'])
+        elif nombre == "Gradient_Boosting":
+            mlflow.log_param("best_n_estimators", grid.best_params_['estimator__n_estimators'])
             mlflow.log_param("best_max_depth", grid.best_params_['estimator__max_depth'])
         else:
             mlflow.log_param("best_n_estimators", grid.best_params_['n_estimators'])
             mlflow.log_param("best_max_depth", grid.best_params_['max_depth'])
+
             
         print(f"   Mejores hiperparámetros seleccionados por CV: {grid.best_params_}")
         
@@ -159,7 +169,6 @@ for nombre, grid in motores_busqueda.items():
         mlflow.log_metric("Test_R2_Promedio_Global", r2_promedio)
         print(f"--> R2 PROMEDIO GLOBAL EN TEST: {r2_promedio:.3f}")
         
-     
         # Guardado seguro habilitando TODOS los tipos nativos requeridos por la ráfaga en skops
         mlflow.sklearn.log_model(
             sk_model=mejor_modelo, 
@@ -170,5 +179,4 @@ for nombre, grid in motores_busqueda.items():
             ]
         )
         print(f"¡{nombre} registrado exitosamente con metadatos completos!")
-
 
