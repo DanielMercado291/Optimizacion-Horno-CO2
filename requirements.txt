@@ -1,0 +1,6 @@
+# Infraestructura de Entorno y Gobierno MLOps para Horno CEMEX
+pandas==2.2.2
+numpy==1.26.4
+scikit-learn==1.5.0
+mlflow==2.13.0
+skops==0.10.0
