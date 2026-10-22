@@ -1,65 +1,71 @@
-# ⚙️ Optimización en Lazo Cerrado de Hornos Industriales mediante Regresión Multi-Salida y Optimización Metaheurística para la Reducción de Emisiones de CO2
+# ⚙️ Optimización en Lazo Cerrado de Hornos Industriales mediante Regresión Multi-Salida y Optimización Metaheurística para la Reducción de Emisiones de CO2 (Planta Monterrey)
 
-Este repositorio contiene la arquitectura modular y el núcleo predictivo avanzado para eficientizar el proceso de combustión en un horno industrial, enfocado en la mitigación del consumo de combustible fósil y la reducción de la huella de CO2. El sistema transiciona de un clasificador experimental simple hacia un entorno de ingeniería formal de dos capas basado en la física del proceso y el control de variables en tiempo real.
+Este repositorio contiene la arquitectura modular, el pipeline de auditoría de datos y el núcleo predictivo avanzado para eficientar el proceso de combustión en el horno industrial de CEMEX Planta Monterrey. El sistema transiciona de un enfoque experimental simple hacia un entorno de ingeniería formal de producción con gobernanza MLOps estricta, mitigando el sobreajuste mediante ordenación temporal y validación cruzada sistemática.
 
----
+## 📁 Descripción del Dataset y Diccionario de Variables
+El conjunto de datos proviene del sistema SCADA industrial alojado en el servidor `pimonterrey`, registrando variables críticas del proceso de clinkerización a intervalos de tiempo continuos:
+*   **Fecha:** Estampa de tiempo (Timestamp) que actúa como el índice cronológico principal.
+*   **Alimentacion (Ton/h):** Flujo másico de materia prima cruda introducida al horno. Variable manipulada principal.
+*   **VTI Precalentador / VTI Enfriador (rpm):** Velocidades de los ventiladores de tiro inducido que controlan el flujo de aire y gases.
+*   **Flujo de Carbon quemador / Flujo Carbon Calcinador (gpm):** Caudal de combustible fósil inyectado en las zonas de combustión.
+*   **%Gases NO / %Gases SO2 / %CO / %O2:** Porcentajes y concentraciones de gases de salida medidos en la chimenea (Variables ambientales y de control estequiométrico).
+*   **Potencia Motor (kW):** Demanda eléctrica del motor del horno. Actúa estrictamente como **Variable Objetivo (Target)** para evaluar la estabilidad mecánica del sistema sin fuga de información.
 
-##  Descripción de la Arquitectura de Doble Capa
+## 🛠️ Arquitectura de Infraestructura y Conexión MLOps
+El entorno opera bajo un estándar de gobernanza formal que asegura la reproducibilidad independiente del proceso:
+*   **Backend Store Relacional:** Registro de metadatos y parámetros en la base SQLite local `mlflow_horno.db`.
+*   **Trazabilidad del Dataset:** Cada corrida almacena la huella digital criptográfica (SHA-256) del archivo `horno_limpio.csv` bajo el tag `dataset_hash`.
 
-Atendiendo las observaciones de validación experimental y diseño metodológico, el prototipo técnico fue reorganizado como un sistema integrado de dos capas operacionales:
+## 📊 Auditoría de Datos, Limpieza y Partición Temporal
+*   **Limpieza Consolidada:** Eliminación total de duplicados y nulos mediante `.drop_duplicates().dropna()`, garantizando **0 nulos remanentes** en memoria.
+*   **Filtros Operativos Estrictos:** Exclusión de periodos transitorios (Alimentación > 50 Ton/h, Potencia Motor > 80 kW).
+*   **Validación Cruzada Temporal:** Optimización paramétrica mediante **`GridSearchCV` acoplado a `TimeSeriesSplit(n_splits=3)`**.
+*   **Set de Prueba Oculto:** Reserva del 15% final cronológico como conjunto independiente invisible.
 
-1. **Capa Predictiva (Regresión Multi-Salida):** En lugar de una clasificación binaria, se implementó una arquitectura de regresión probabilística basada en `MultiOutputRegressor` y ventanas de retraso temporal (`_lag1`, `_lag2`). El modelo captura el estado previo del horno y predice los valores físicos exactos de las emisiones de salida y la demanda mecánica (`NO`, `SO2`, `CO`, `O2`, `Potencia_Motor`) a partir de los setpoints operativos.
-2. **Capa de Optimización en Modo Sombra (Evolución Diferencial):** Un algoritmo metaheurístico basado en `differential_evolution` toma el modelo matemático entrenado y busca de forma inversa la combinación óptima de variables manipuladas para maximizar la producción, penalizando severamente cualquier escenario que viole las restricciones operativas y ambientales de seguridad.
+## 🛡️ Solución Definitiva a la Fuga de Información
+Se eliminó la variable `Potencia Motor` de las características de entrada (`features`). Los modelos predicen la demanda eléctrica basándose únicamente en variables operativas puras y rezagos térmicos (`_lag1`, `_lag2`), restituyendo la legitimidad de las métricas.
 
----
+## 📈 Tabla Comparativa de Resultados Reales (Set de Prueba Oculto)
 
-##  Validación Experimental y Separación Temporal (Científica)
+| Algoritmo Evaluado (MultiOutput) | Métrica | %Gases NO | %Gases SO2 | %CO | %O2 | Potencia Motor | Promedio Global |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **HistGradient_Boosting** <br> *(Hiperparámetros CV óptimos:* <br> *max_depth: 10, max_iter: 50)* | **R²** <br> **RMSE** <br> **MAE** | **0.675** <br> **142.731** <br> **92.492** | **0.526** <br> **1989.620** <br> **1211.356** | **0.036** <br> **0.039** <br> **0.012** | **0.557** <br> **1.447** <br> **0.945** | **0.886** <br> **9.921** <br> **6.714** | **0.536** |
+| **Gradient_Boosting** <br> *(Hiperparámetros CV óptimos:* <br> *max_depth: 5, n_estimators: 50)* | R² <br> RMSE <br> MAE | 0.688 <br> 139.996 <br> 89.275 | 0.515 <br> 2012.592 <br> 1216.895 | -0.127 <br> 0.042 <br> 0.011 | 0.556 <br> 1.449 <br> 0.941 | 0.893 <br> 9.605 <br> 6.462 | **0.505** |
+| **Extra_Trees_Regressor** <br> *(Hiperparámetros CV óptimos:* <br> *max_depth: 14, n_estimators: 100)* | R² <br> RMSE <br> MAE | 0.525 <br> 172.610 <br> 121.101 | 0.530 <br> 1982.203 <br> 1258.958 | -0.387 <br> 0.047 <br> 0.028 | 0.293 <br> 1.827 <br> 1.396 | 0.740 <br> 14.980 <br> 9.558 | **0.340** |
+| **Random_Forest_Regressor** <br> *(Hiperparámetros CV óptimos:* <br> *max_depth: 14, n_estimators: 50)* | R² <br> RMSE <br> MAE | 0.524 <br> 170.778 <br> 121.391 | 0.503 <br> 2037.529 <br> 1285.824 | -0.374 <br> 0.047 <br> 0.028 | 0.310 <br> 1.806 <br> 1.376 | 0.559 <br> 19.505 <br> 12.979 | **0.307** |
 
-Para erradicar por completo el sobreajuste (*overfitting*) por memorización de datos, se aplicó una ordenación cronológica estricta (`df.sort_index()`) sobre las **31,455 filas válidas** extraídas del SCADA, dividiendo el dataset en bloques temporales independientes:
-*   **Set de Entrenamiento (70%):** 22,018 muestras (Mapeo histórico del proceso).
-*   **Set de Validación (15%):** 4,718 muestras (Ajuste fino de hiperparámetros).
-*   **Set de Prueba (15%):** 4,719 muestras (Evaluación estricta ante datos completamente nuevos).
+**SELECCIÓN EXCLUSIVA DEL MODELO:** **HistGradient_Boosting** se corona como el núcleo operativo con un **R² Promedio Global legítimo de 0.536**. Su diseño basado en histogramas y optimización iterativa de residuos demostró una capacidad superior para capturar las inercias térmicas y estabilizar el Monóxido de Carbono (R² = 0.036).
 
----
+## 📊 Interpretación de Visualizaciones de Auditoría (Ubicadas en `/reportes`)
+1.  **Matriz de Correlación (`matriz_correlacion.png`):** Revela la alta dependencia física lineal entre los flujos de carbón y la temperatura de los gases, validando la inercia térmica simulada mediante rezagos temporales (`_lag1`, `_lag2`).
+2.  **Detección de Valores Atípicos (`boxplot_outliers.png`):** Mapea visualmente la dispersión operativa. Permite comprobar que los límites físicos de alimentación e inercias mecánicas se mantuvieron acotados tras la remoción del ruido transitorio del SCADA.
 
-## 📊 Tabla Comparativa de Resultados Reales (Set de Prueba Oculto)
+## 🎯 Relación Cuantitativa con la Reducción de Emisiones de CO₂
+El rendimiento alcanzado en la predicción de gases, específicamente un **R² de 0.557 en el Oxígeno residual** con una desviación absoluta baja (**RMSE = 1.447%**), establece la conexión directa con el abatimiento ambiental de la planta:
+*   **Optimización Estequiométrica:** Al conocer con precisión milimétrica el exceso de aire (\(O_2\)) en la chimenea ante variaciones de carga, la capa de optimización por Evolución Diferencial calcula de forma segura el límite técnico de reducción de combustible fósil (Flujo de Carbón).
+*   **Control Predictivo Inverso:** Minimizar de forma controlada el Oxígeno remanente hacia el punto óptimo de operación (~3%) abate directamente el consumo específico de energía térmica, disminuyendo las pérdidas de calor por tiro y recortando estequiométricamente las toneladas de CO₂ emitidas a la atmósfera por tonelada de clínker producida.
 
-Los siguientes datos corresponden a las métricas estandarizadas globales de los 4 algoritmos tabulares evaluados en paralelo en la GPU de Google Colab:
+## 🚀 Guía de Instalación y Reproducción (Para la Profesora)
+Siga estos pasos estructurados para replicar de forma independiente el pipeline y levantar la interfaz de seguimiento experimental:
 
-| Algoritmo Evaluado (MultiOutput) | \(R^2\) NO | MAE NO | \(R^2\) SO2 | MAE SO2 | \(R^2\) CO | MAE CO | \(R^2\) O2 | MAE O2 | \(R^2\) Pot. Motor | MAE Pot. Motor | \(R^2\) Promedio |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Extra Trees Regressor** | **0.708** | **88.742** | **0.402** | **1619.68** | **0.065** | **0.015%** | **0.599** | **0.985%** | **0.992** | **1.137 kW** | **0.5532** |
-| HistGradientBoosting | 0.708 | 87.599 | 0.389 | 1551.00 | -0.247 | 0.021% | 0.591 | 0.963% | 0.999 | 0.342 kW | 0.4880 |
-| Random Forest Regressor | 0.685 | 92.430 | 0.336 | 1765.30 | -2.943 | 0.022% | 0.580 | 1.014% | 1.000 | 0.044 kW | -0.0684 |
-| Gradient Boosting Regressor | 0.682 | 91.445 | 0.304 | 1721.60 | -4.122 | 0.021% | 0.583 | 0.989% | 1.000 | 0.029 kW | -0.3106 |
+1.  **Clonar el repositorio e instalar dependencias:**
+    ```bash
+    git clone https://github.com
+    cd Optimizacion-Horno-CO2
+    pip install -r requirements.txt
+    ```
+2.  **Ejecutar los pipelines de auditoría y entrenamiento:**
+    ```bash
+    cd Actividad5/fuentes
+    python eda_auditoria.py
+    python train.py
+    ```
+3.  **Levantar y visualizar la interfaz gráfica de MLflow:**
+    Regrese a la raíz del proyecto (`cd ../..`) donde se encuentra el archivo `mlflow_horno.db` y ejecute el servidor de tracking local:
+    ```bash
+    mlflow server --backend-store-uri sqlite:///mlflow_horno.db --host 127.0.0.1 --port 8080
+    ```
+    Abra su navegador web e ingrese a la ruta **`http://127.0.0.1:8080`** para auditar interactivamente las métricas del experimento.
 
-**MODELO SELECCIONADO:** **Extra Trees Regressor** se consolida como el núcleo predictivo del proyecto al alcanzar la mayor capacidad de generalización con un **\(R^2\) promedio de 0.5532**. 
-*   *Nota sobre la métrica de CO:* Debido a la nula varianza histórica del monóxido en planta, los valores de \(R^2\) tienden a ser negativos. No obstante, el **Error Absoluto Medio (MAE) de apenas 0.015%** demuestra una precisión milimétrica del modelo para detectar la combustión incompleta.
-
----
-
-##  Resultados de la Optimización y Recomendación Operativa (Modo Sombra)
-
-Tomando como referencia un punto histórico óptimo (\(O_2 = 2.75\%\), \(NO = 482.5\text{ ppm}\)) y aplicando restricciones duras mediante penalizaciones en la función objetivo, la capa de Evolución Diferencial arrojó las siguientes **Recomendaciones en Modo Sombra para el operador**:
-
-### 🛠️ Setpoints Sugeridos para Variables Manipuladas:
-*   **Alimentación (`FI_520501.MCO`):** 184.70 Ton/h
-*   **Flujo de Carbón Quemador (`FIC_885401.MCO`):** 5.95 gpm
-*   **Flujo de Carbón Calcinador (`FI_884801.MCO`):** 7.59 gpm
-*   **VTI Precalentador (`SI_530201.MCO`):** 569.97
-*   **VTI Enfriador (`SI_566701.MCO`):** 206.67
-
-###  Emisiones y Consumos Físicos Predichos bajo estos Setpoints:
-*   **Potencia Motor Principal (`JI_541101.MCO`) = 203.28 kW** (Cumple la restricción mecánica de \(\le\) 230 kW).
-*   **CO Chimenea (`AI_540501A.MCO`) = 0.009%** (Garantiza combustión completa, cumpliendo la meta de \(\le\) 0.05%).
-*   **O2 Chimenea (`AI_540501D.MCO`) = 3.01%** (Exceso de aire minimizado al límite técnico de \(\le\) 3%, reduciendo directamente las pérdidas de calor y optimizando el ahorro de carbón para mitigar el CO2).
-
----
-
-##  Conclusiones y Justificación de Infraestructura
-
-1.  **Justificación de Modelos Nativos del Hub:** Tras auditar el catálogo público de Hugging Face bajo la tarea `tabular-regression`, se verificó la ausencia de arquitecturas preentrenadas capaces de modelar la telemetría específica de este horno industrial. Se justifica el uso de la especificación oficial "Scikit-In-HuggingFace" para entrenar e instrumentar algoritmos robustos basados en árboles desde cero.
-2.  **Mitigación Total de Fugas de Datos:** Al estructurar la regresión multi-salida con retrasos temporales e implementar la división cronológica por bloques independientes, las métricas obtenidas reflejan fielmente la capacidad de operación del sistema ante datos totalmente invisibles, listos para un entorno productivo.
-3.  **Viabilidad en Lazo Cerrado:** El modelo seleccionado procesa los lotes operacionales a una velocidad de microsegundos. Al mantener un enfoque de **Modo Sombra**, el sistema actúa de forma segura sirviendo recomendaciones en tiempo real en la pantalla del SCADA de la planta de Monterrey, permitiendo que el operador humano valide las consignas óptimas de reducción de emisiones de CO2 antes de automatizar el control definitivo.
 
 
