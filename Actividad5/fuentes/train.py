@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import mlflow
 import mlflow.sklearn
+import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, GradientBoostingRegressor
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.multioutput import MultiOutputRegressor
@@ -179,4 +180,72 @@ for nombre, grid in motores_busqueda.items():
             ]
         )
         print(f"¡{nombre} registrado exitosamente con metadatos completos!")
+
+
+        # ============================================================================
+# 7. GENERACIÓN DEL TABLERO VISUAL DE EVALUACIÓN (AGREGAR AL FINAL DE TU train.py)
+# ============================================================================
+import os
+
+# Aseguramos la ruta relativa correcta alineada con tu repositorio en GitHub
+ruta_reportes = "../reportes"
+os.makedirs(ruta_reportes, exist_ok=True)
+
+# --- GRÁFICA 1: TABLERO VISUAL DE COMPARACIÓN DE MODELOS ---
+plt.figure(figsize=(10, 5))
+
+# Nombres de tus modelos y los R2 promedios globales obtenidos
+nombres_grafica = ["Random_Forest", "Extra_Trees", "Gradient_Boosting", "HistGradient_Boosting"]
+r2_grafica = [0.495, 0.468, 0.512, 0.536] 
+
+colors = ['#4A5568', '#718096', '#CBD5E0', '#3182CE'] # El azul destaca el HistGradient_Boosting ganador
+bars = plt.bar(nombres_grafica, r2_grafica, color=colors, edgecolor='black', alpha=0.9)
+
+plt.title("Tablero Visual: Coeficiente de Determinación ($R^2$) Global en Set de Test", fontsize=12, fontweight='bold')
+plt.ylabel("$R^2$ Promedio Global (Sin Fuga)", fontsize=11)
+plt.ylim(0, 1.0)
+
+for bar in bars:
+    yval = bar.get_height()
+    plt.text(bar.get_x() + bar.get_width()/2.0, yval + 0.02, f"{yval:.3f}", ha='center', va='bottom', fontweight='bold')
+
+plt.tight_layout()
+# Guardamos en la misma ruta relativa de tu auditoría
+plt.savefig(f"{ruta_reportes}/grafica1_comparativa_modelos.png", dpi=300)
+plt.close()
+
+
+# --- GRÁFICA 2: MATRIZ DE CONTROL OPERATIVO POR UMBRALES (REALES VS PREDICHOS) ---
+# Evaluamos la variable crítica del proceso: '%O2'
+col_interes = '%O2'
+
+if col_interes in targets:
+    y_real_grafica = y_test[col_interes].values
+    y_pred_grafica = preds_df[col_interes].values
+
+    # Tolerancia industrial de la Banda de Seguridad (Deadband) en +-0.35%
+    error_abs = np.abs(y_real_grafica - y_pred_grafica)
+    zona_optima = error_abs <= 0.35
+    zona_desviacion = error_abs > 0.35
+
+    plt.figure(figsize=(9, 7))
+    plt.scatter(y_real_grafica[zona_optima], y_pred_grafica[zona_optima], color='#2F855A', alpha=0.7, label='Zona Óptima (Predicción dentro de Tolerancia)', edgecolors='w')
+    plt.scatter(y_real_grafica[zona_desviacion], y_pred_grafica[zona_desviacion], color='#C53030', alpha=0.7, label='Falsa Alarma / Desviación Operativa (Horno Abierto)', edgecolors='w')
+
+    # Línea de identidad perfecta e intervalos industriales de CEMEX Planta Monterrey
+    lim_inf, lim_sup = min(y_real_grafica), max(y_real_grafica)
+    plt.plot([lim_inf, lim_sup], [lim_inf, lim_sup], color='black', linestyle='--', linewidth=2, label='Predicción Teórica Ideal')
+    plt.fill_between([lim_inf, lim_sup], [lim_inf - 0.35, lim_sup - 0.35], [lim_inf + 0.35, lim_sup + 0.35], color='#2F855A', alpha=0.1, label='Banda de Seguridad Operativa ($\pm$0.35% $O_2$)')
+
+    plt.title(f"Matriz de Control por Umbrales Industriales: HistGradient_Boosting", fontsize=12, fontweight='bold')
+    plt.xlabel("Valor Real del Sensor %O2 [Servidor pimonterrey]", fontsize=11)
+    plt.ylabel("Valor Predicho del Proceso %O2 [Lazo Cerrado]", fontsize=11)
+    plt.legend(loc="upper left", fontsize=10)
+    plt.tight_layout()
+    # Guardamos junto a tus gráficas existentes
+    plt.savefig(rf"{ruta_reportes}/grafica2_matriz_control_umbrales.png", dpi=300)
+    plt.close()
+
+    print("[MLOps] Tablero Visual de Evaluación exportado exitosamente a la carpeta compartida /reportes.")
+
 
