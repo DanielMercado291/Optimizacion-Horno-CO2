@@ -1,0 +1,25 @@
+artifact_path: file:C:/Users/damercado/OneDrive - CEMEX/Escritorio/Proyecto IA/Optimizacion-Horno-CO2/Actividad5/fuentes/mlruns/2/models/m-d97f1c90b6a84c6b9ffb0b89c4eec145/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.skops
+    predict_fn: predict
+    python_version: 3.14.6
+  sklearn:
+    code: null
+    pickled_model: model.skops
+    serialization_format: skops
+    sklearn_version: 1.9.0
+    skops_trusted_types:
+    - sklearn.tree._tree.Tree
+    - sklearn.ensemble._hist_gradient_boosting.predictor.TreePredictor
+mlflow_version: 3.17.1
+model_id: m-d97f1c90b6a84c6b9ffb0b89c4eec145
+model_size_bytes: 8678555
+model_uuid: m-d97f1c90b6a84c6b9ffb0b89c4eec145
+prompts: null
+run_id: 48bb2bfd34814256a3ebed4c63fc1c85
+utc_time_created: '2026-10-26 17:09:38.453817'
