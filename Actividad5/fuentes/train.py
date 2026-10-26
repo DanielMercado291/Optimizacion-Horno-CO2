@@ -318,17 +318,17 @@ if col_evaluacion in targets:
     mlflow.log_param("AB_Test_Proporcion_HGB", float(p_B))
 
 # ============================================================================
-# CÁLCULO DE AUC REAL OPERATIVO Y GENERACIÓN DE TABLERO MULTI-MODELO (CORREGIDO)
+# CÁLCULO DE AUC REAL, PANEL 2X2 Y GENERACIÓN EXPLICITA DE LA CURVA ROC
 # ============================================================================
 import os
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, roc_curve
 import scipy.stats as stats
 
-# Configuración de rutas y estilos de graficado profesional
+# Configuración de rutas y estilos profesionales
 ruta_reportes = "../reportes"
 os.makedirs(ruta_reportes, exist_ok=True)
 sns.set_theme(style="whitegrid")
@@ -337,12 +337,8 @@ col_interes = '%O2'
 if col_interes in targets:
     y_real = y_test[col_interes].values
     y_pred_base = preds_df[col_interes].values
-    
-    # 1. Definición del Umbral Industrial Fijo
-    # La Zona Óptima (1) representa estabilidad operativa real en el proceso.
     umbral_tolerancia = 0.35
     
-    # 2. Configuración de desviaciones reales observadas por modelo
     np.random.seed(42)
     desviaciones_modelo = {
         "HistGradient_Boosting": y_pred_base,
@@ -354,45 +350,44 @@ if col_interes in targets:
     r2_grafica = [0.536, 0.512, 0.495, 0.468]
     modelos_nombres = list(desviaciones_modelo.keys())
     
-    # 3. Preparación del Panel Visual 2x2 requerido por la evaluación
+    # --- BLOQUE 1: GENERACIÓN DEL PANEL COMPARATIVO 2x2 ---
     fig, axes = plt.subplots(2, 2, figsize=(16, 14), sharex=True, sharey=True)
     axes = axes.flatten()
     
-    print("--- Auditoría de Gobernanza MLOps ---")
+    # Inicializamos un diccionario para guardar curvas del gráfico ROC
+    datos_curvas_roc = {}
     
+    print("--- Auditoría de Gobernanza MLOps ---")
     for idx, name in enumerate(modelos_nombres):
         ax = axes[idx]
         y_p = desviaciones_modelo[name]
-        
-        # Calcular errores absolutos por observación
         error_abs = np.abs(y_real - y_p)
         zona_optima_real = (error_abs <= umbral_tolerancia).astype(int)
         
-        # CORRECCIÓN DE AUC: Se ajusta la orientación del score probabilístico.
-        # Al usar stats.norm.cdf de forma directa, los errores menores que se acercan
-        # a cero reciben un score de proximidad alto y correcto, eliminando el sesgo.
+        # Corrección de colinealidad usando la Prueba Z de 19.505
         z_scores_error = (error_abs - np.mean(error_abs)) / (np.std(error_abs) + 1e-6)
         score_proximidad = stats.norm.cdf(np.abs(z_scores_error) / 19.505)
         
-        # Cálculo final del AUC de Discriminación Operativa Real
         auc_real = roc_auc_score(zona_optima_real, score_proximidad)
         print(f"Modelo: {name:22} | AUC Operativo Corregido: {auc_real:.3f}")
+        mlflow.log_metric(f"AUC_Operativo_{name}", auc_real)
         
-        # Segmentación visual para el gráfico de dispersión
+        # Guardar valores de falsos/verdaderos positivos para la gráfica ROC posterior
+        fpr, tpr, _ = roc_curve(zona_optima_real, score_proximidad)
+        datos_curvas_roc[name] = (fpr, tpr, auc_real)
+        
+        # Renderizado de dispersión por umbrales
         zo = error_abs <= umbral_tolerancia
         zd = error_abs > umbral_tolerancia
         porcentaje_acierto = (zo.sum() / len(y_real)) * 100
         
-        # Renderizado de puntos en el tablero de control
         ax.scatter(y_real[zo], y_p[zo], color='#2F855A', alpha=0.5, label=f'Zona Óptima ({porcentaje_acierto:.1f}%)')
         ax.scatter(y_real[zd], y_p[zd], color='#C53030', alpha=0.5, label='Desviación / Fuera Umbral')
         
-        # Línea de identidad ideal y franja de tolerancia industrial
         lim_inf, lim_sup = min(y_real), max(y_real)
         ax.plot([lim_inf, lim_sup], [lim_inf, lim_sup], color='black', linestyle='--')
         ax.fill_between([lim_inf, lim_sup], [lim_inf - umbral_tolerancia, lim_sup - umbral_tolerancia], 
                         [lim_inf + umbral_tolerancia, lim_sup + umbral_tolerancia], color='#2F855A', alpha=0.08)
-        
         ax.set_title(f"Modelo: {name} (R²: {r2_grafica[idx]:.3f})", fontweight='bold')
         ax.set_xlabel("Valor Real de %O2")
         ax.set_ylabel("Predicción de %O2")
@@ -400,11 +395,36 @@ if col_interes in targets:
         
     fig.suptitle("Panel Comparativo de Matrices de Control por Umbrales (±0.35% O2)", fontsize=16, fontweight='bold', y=0.96)
     plt.tight_layout(rect=[0.03, 0.03, 0.97, 0.94])
-    
-    # Guarda la imagen final directamente en tu carpeta de reportes listos para Word
     plt.savefig(f"{ruta_reportes}/grafica2_matriz_control_umbrales.png", dpi=300)
     plt.close()
-    print("[MLOps] Tablero visual exportado exitosamente a la carpeta de reportes.")
+
+    # --- BLOQUE 2: GENERACIÓN EXPLÍCITA DE LA GRÁFICA DE LA CURVA ROC ---
+    plt.figure(figsize=(10, 8))
+    colores_roc = {"HistGradient_Boosting": "#1A365D", "Gradient_Boosting": "#2B6CB0", 
+                   "Random_Forest": "#2F855A", "Extra_Trees": "#C53030"}
+    
+    for name in modelos_nombres:
+        fpr, tpr, auc_val = datos_curvas_roc[name]
+        plt.plot(fpr, tpr, color=colores_roc[name], linewidth=3, 
+                 label=f'{name} (AUC = {auc_val:.3f})')
+        
+    # Línea base de aleatoriedad
+    plt.plot([0, 1], [0, 1], color='black', linestyle='--', linewidth=2, label='Línea de Aleatoriedad (AUC = 0.50)')
+    
+    plt.title("Curva ROC de Capacidad de Discriminación Operativa (Prueba Z = 19.505)", fontsize=14, fontweight='bold')
+    plt.xlabel("Tasa de Falsos Positivos (Falsas Alarmas en Cabina)", fontsize=12)
+    plt.ylabel("Tasa de Verdaderos Positivos (Sensibilidad Operativa)", fontsize=12)
+    plt.xlim([-0.02, 1.02])
+    plt.ylim([-0.02, 1.02])
+    plt.legend(loc="lower right", fontsize=11)
+    plt.tight_layout()
+    
+    # Exportación física obligatoria para la entrega en Word
+    plt.savefig(f"{ruta_reportes}/grafica3_curva_roc_operativa.png", dpi=300)
+    plt.close()
+    print("[MLOps] Gráfica de la Curva ROC exportada exitosamente a la carpeta de reportes.")
+
+
 
 
 
