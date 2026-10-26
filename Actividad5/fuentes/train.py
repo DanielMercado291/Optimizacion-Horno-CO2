@@ -117,13 +117,43 @@ motores_busqueda = {
 # ==============================================================================
 # 6. EJECUCIÓN, EVALUACIÓN ESTADÍSTICA Y REGISTRO MLOPS CORREGIDO
 # ==============================================================================
+
+# ============================================================================
+# ACCUMULADORES DINÁMICOS PARA LA GRÁFICA COMPARATIVA GLOBAL
+# ============================================================================
+modelos_lista_dinamica = []
+cv_promedios_dinamicos = []
+test_promedios_dinamicos = []
+
+# Aquí abajo continúa tu ciclo original:
 for nombre, grid in motores_busqueda.items():
     with mlflow.start_run(run_name=nombre):
         print(f"\nEjecutando Grid Search Sistemático para: {nombre}...")
         
         # Ajuste de la grilla de búsqueda utilizando validación cruzada temporal
         grid.fit(X_train_val, y_train_val)
+
+        print(f"   [CV] Desglose de Validación Cruzada Cronológica para {nombre}:")
+        idx_optimo = grid.best_index_
+        r2_f1 = grid.cv_results_['split0_test_score'][idx_optimo]
+        r2_f2 = grid.cv_results_['split1_test_score'][idx_optimo]
+        r2_f3 = grid.cv_results_['split2_test_score'][idx_optimo]
         
+        print(f"      * Fold 1 (Pasado Remoto):      R2 = {r2_f1:.3f}")
+        print(f"      * Fold 2 (Fase Transición):    R2 = {r2_f2:.3f}")
+        print(f"      * Fold 3 (Operación Reciente):  R2 = {r2_f3:.3f}")
+        print(f"      * Promedio Global de CV (Best): R2 = {grid.best_score_:.3f}")
+        
+        # Registro automático en la bitácora MLOps para auditoría de la profesora
+        mlflow.log_metric(f"CV_Fold1_R2_{nombre}", r2_f1)
+        mlflow.log_metric(f"CV_Fold2_R2_{nombre}", r2_f2)
+        mlflow.log_metric(f"CV_Fold3_R2_{nombre}", r2_f3)
+
+
+
+
+
+
         # Extracción del mejor estimador validado
         mejor_modelo = grid.best_estimator_
         
@@ -169,6 +199,12 @@ for nombre, grid in motores_busqueda.items():
         r2_promedio = np.mean(lista_r2)
         mlflow.log_metric("Test_R2_Promedio_Global", r2_promedio)
         print(f"--> R2 PROMEDIO GLOBAL EN TEST: {r2_promedio:.3f}")
+
+                # Guardar dinámicamente los puntajes reales en las listas de control
+        modelos_lista_dinamica.append(nombre)
+        cv_promedios_dinamicos.append(grid.best_score_)
+        test_promedios_dinamicos.append(r2_promedio)
+
         
         # Guardado seguro habilitando TODOS los tipos nativos requeridos por la ráfaga en skops
         mlflow.sklearn.log_model(
@@ -182,7 +218,49 @@ for nombre, grid in motores_busqueda.items():
         print(f"¡{nombre} registrado exitosamente con metadatos completos!")
 
 
-        # ============================================================================
+# ============================================================================
+# EXTRA: GENERACIÓN AUTOMÁTICA DEL TABLERO COMPARATIVO GLOBAL EN REPORTE (DINÁMICO)
+# ============================================================================
+print("\n[MLOps] Generando Tablero Comparativo Global Dinámico...")
+
+ruta_reportes_final = "../reportes"
+if not os.path.exists(ruta_reportes_final):
+    os.makedirs(ruta_reportes_final, exist_ok=True)
+
+x_indices = np.arange(len(modelos_lista_dinamica))
+ancho_barra = 0.35
+
+plt.figure(figsize=(11, 7))
+
+# Renderizado de barras leyendo las métricas reales calculadas en la ejecución actual
+plt.bar(x_indices - ancho_barra/2, cv_promedios_dinamicos, ancho_barra, label='Promedio CV (Pasado)', color='#2B6CB0', edgecolor='black')
+plt.bar(x_indices + ancho_barra/2, test_promedios_dinamicos, ancho_barra, label='R² Global Test (Futuro Oculto)', color='#3182CE', edgecolor='black')
+
+# Agregar los valores numéricos exactos en tiempo real arriba de cada barra
+for i in range(len(modelos_lista_dinamica)):
+    plt.text(i - ancho_barra/2, cv_promedios_dinamicos[i] + 0.01, f"{cv_promedios_dinamicos[i]:.3f}", ha='center', fontweight='bold', fontsize=10)
+    plt.text(i + ancho_barra/2, test_promedios_dinamicos[i] + 0.01, f"{test_promedios_dinamicos[i]:.3f}", ha='center', fontweight='bold', fontsize=10)
+
+# Configuración de etiquetas y diseño profesional
+plt.title("Evaluación Global de la Ráfaga de Modelos: Validación Cruzada vs Set de Test", fontsize=13, fontweight='bold', pad=15)
+plt.xlabel("Algoritmo de Ensamble Evaluado", fontsize=11)
+plt.ylabel("Coeficiente de Determinación (R²)", fontsize=11)
+plt.xticks(x_indices, modelos_lista_dinamica, fontsize=10)
+plt.ylim(0, max(max(cv_promedios_dinamicos), max(test_promedios_dinamicos)) + 0.15)
+plt.legend(loc='upper left', fontsize=10)
+plt.tight_layout()
+
+# Exportación física automática
+plt.savefig(f"{ruta_reportes_final}/grafica1_evaluacion_global.png", dpi=300)
+plt.close()
+print("[MLOps] Gráfico comparativo dinámico 'grafica1_evaluacion_global.png' exportado exitosamente.")
+
+       
+       
+
+
+
+# ============================================================================
 # 7. GENERACIÓN DEL TABLERO VISUAL DE EVALUACIÓN (AGREGAR AL FINAL DE TU train.py)
 # ============================================================================
 import os
