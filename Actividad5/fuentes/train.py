@@ -340,7 +340,7 @@ if col_interes in targets:
     
     # 1. Definición del Umbral Industrial Fijo
     # La Zona Óptima (1) representa estabilidad operativa real en el proceso.
-    umbral_tolerancia = 0.35
+    umbral_tolerancia = 0.15
     
     # 2. Configuración de desviaciones reales observadas por modelo
     np.random.seed(42)
