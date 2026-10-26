@@ -119,11 +119,11 @@ motores_busqueda = {
 # ==============================================================================
 
 # ==============================================================================
-# 6. EJECUCIÓN, EVALUACIÓN ESTADÍSTICA Y REGISTRO MLOPS (TABLITA RECOBRADA)
+# 6. EJECUCIÓN, EVALUACIÓN ESTADÍSTICA Y REGISTRO MLOPS (100% DINÁMICO)
 # ==============================================================================
 import scipy.stats as stats
 
-# 1. PREPARACIÓN DEL LIENZO 2X2 ANTES DEL CICLO
+# 1. PREPARACIÓN CORRECTA DEL LIENZO 2X2 ANTES DEL BUCLE
 fig, axes = plt.subplots(2, 2, figsize=(16, 14), sharex=True, sharey=True)
 axes = axes.flatten()
 
@@ -132,13 +132,7 @@ modelos_lista_dinamica = []
 cv_promedios_dinamicos = []
 test_promedios_dinamicos = []
 
-# Mapeo fijo de R2 históricos reales para los títulos del panel
-r2_mapeo_titulos = {
-    "HistGradient_Boosting": 0.536,
-    "Gradient_Boosting": 0.512,
-    "Random_Forest": 0.495,
-    "Extra_Trees": 0.468
-}
+# SE ELIMINÓ EL DICCIONARIO HARDCODED 'r2_mapeo_titulos' PARA ASEGURAR REPRODUCIBILIDAD
 
 for idx, (nombre, grid) in enumerate(motores_busqueda.items()):
     with mlflow.start_run(run_name=nombre):
@@ -191,23 +185,27 @@ for idx, (nombre, grid) in enumerate(motores_busqueda.items()):
         preds_df = pd.DataFrame(preds, columns=targets, index=X_test.index)
         
         # ============================================================================
-        # 2. REINCORPORACIÓN DE LA TABLITA DETALLADA VARIABLE POR VARIABLE
+        # 2. IMPRESIÓN DETALLADA VARIABLE POR VARIABLE Y EXTRACCIÓN DE VALORES REALES
         # ============================================================================
         lista_r2 = []
+        r2_especifico_o2 = 0.0 # Variable local para capturar el R2 dinámico del Oxígeno
+        
         print(f"--- Métricas en Set de Prueba Oculto para {nombre} ---")
         for col in targets:
             r2_col = r2_score(y_test[col], preds_df[col])
             mae_col = mean_absolute_error(y_test[col], preds_df[col])
             rmse_col = np.sqrt(mean_squared_error(y_test[col], preds_df[col]))
             
-            # Formateo compatible para llaves en la interfaz de MLflow
+            # Almacenamos el R2 real de Oxígeno para mapearlo de forma transparente al título
+            if col == '%O2':
+                r2_especifico_o2 = r2_col
+                
             nombre_metrica = col.replace("%", "Porcentaje_").replace(" ", "_")
             mlflow.log_metric(f"Test_R2_{nombre_metrica}", r2_col)
             mlflow.log_metric(f"Test_MAE_{nombre_metrica}", mae_col)
             mlflow.log_metric(f"Test_RMSE_{nombre_metrica}", rmse_col)
             
             lista_r2.append(r2_col)
-            # ESTA ES LA LÍNEA QUE SE HABÍA BORRADO Y QUE PINTA TU TABLA EN LA CONSOLA:
             print(f"Variable: {col:<22} | R2: {r2_col:.3f} | RMSE: {rmse_col:.3f} | MAE: {mae_col:.3f}")
         
         r2_promedio = np.mean(lista_r2)
@@ -219,7 +217,7 @@ for idx, (nombre, grid) in enumerate(motores_busqueda.items()):
         cv_promedios_dinamicos.append(grid.best_score_)
         test_promedios_dinamicos.append(r2_promedio)
         
-        # --- BLOQUE DE GRAFICACIÓN INTEGRADO PARA EL PANEL 2X2 ---
+        # --- BLOQUE DE GRAFICACIÓN 100% DINÁMICO PARA EL PANEL 2X2 ---
         ax = axes[idx]
         y_real_gas = y_test['%O2'].values
         y_pred_gas = preds_df['%O2'].values
@@ -236,7 +234,8 @@ for idx, (nombre, grid) in enumerate(motores_busqueda.items()):
         ax.plot([lim_inf, lim_sup], [lim_inf, lim_sup], color='black', linestyle='--')
         ax.fill_between([lim_inf, lim_sup], [lim_inf - 0.35, lim_sup - 0.35], [lim_inf + 0.35, lim_sup + 0.35], color='#2F855A', alpha=0.08)
         
-        ax.set_title(f"Modelo: {nombre} (R²: {r2_mapeo_titulos.get(nombre, r2_promedio):.3f})", fontweight='bold')
+        # EL TÍTULO AHORA USA EL R2 CALCULADO EN TIEMPO REAL PARA ESTA VARIABLE
+        ax.set_title(f"Modelo: {nombre} (R² O₂: {r2_especifico_o2:.3f})", fontweight='bold')
         ax.set_xlabel("Valor Real de %O2")
         ax.set_ylabel("Predicción de %O2")
         ax.legend(loc="upper left")
@@ -252,12 +251,84 @@ for idx, (nombre, grid) in enumerate(motores_busqueda.items()):
         )
         print(f"¡{nombre} registrado exitosamente con metadatos completos!")
 
-# 2. CIERRE Y EXPORTACIÓN DEL PANEL 2X2 COMPLETO (FUERA DEL BUCLE)
+# 2. CIERRE Y EXPORTACIÓN DEL PANEL 2X2 UTILIZANDO 'FIG.SAVEFIG' PARA EVALUACIÓN MULTI-PANEL
 fig.suptitle("Panel Comparativo de Matrices de Control por Umbrales (±0.35% O2)", fontsize=16, fontweight='bold', y=0.96)
 plt.tight_layout(rect=[0.03, 0.03, 0.97, 0.94])
-plt.savefig("../reportes/grafica2_matriz_control_umbrales.png", dpi=300)
-plt.close()
-print("[MLOps] Panel 2x2 completo 'grafica2_matriz_control_umbrales.png' exportado exitosamente.")
+
+# Forzamos el guardado del objeto estructurado completo para capturar los 4 subplots juntos
+fig.savefig("../reportes/grafica2_matriz_control_umbrales.png", dpi=300)
+plt.close(fig)
+print("[MLOps] Panel 2x2 reproducible guardado exitosamente en la carpeta de reportes.")
+
+
+# ============================================================================
+# EXTRA: GENERACIÓN DEL TABLERO COMPARATIVO 2X2 DE MATRICES DE CONTROL (NUEVO)
+# ============================================================================
+
+print("\n[MLOps] Generando el nuevo Panel Comparativo 2x2 Dinámico y Reproducible...")
+
+ruta_grafica_nueva = "../reportes"
+if not os.path.exists(ruta_grafica_nueva):
+    os.makedirs(ruta_grafica_nueva, exist_ok=True)
+
+# Preparamos el lienzo unificado de 2 filas y 2 columnas
+fig_panel, axes_panel = plt.subplots(2, 2, figsize=(16, 14), sharex=True, sharey=True)
+axes_panel = axes_panel.flatten()
+
+# Extraemos los datos reales del sensor de oxígeno del set de prueba final
+y_real_gas = y_test['%O2'].values
+umbral_tolerancia = 0.35
+
+# Iteramos de forma estrictamente dinámica sobre los modelos entrenados en tu pipeline
+for idx, (name, grid) in enumerate(motores_busqueda.items()):
+    ax = axes_panel[idx]
+    
+    # 1. Obtener la predicción real y específica para la columna %O2 de este modelo
+    mejor_estimador = grid.best_estimator_
+    preds_modelo_actual = mejor_estimador.predict(X_test)
+    
+    # Si la salida es multi-salida, extraemos la columna correspondiente al %O2
+    if preds_modelo_actual.ndim > 1:
+        # Buscamos la posición del %O2 dentro de la lista de targets reales de tu código
+        idx_o2 = list(targets).index('%O2')
+        y_p_gas = preds_modelo_actual[:, idx_o2]
+    else:
+        y_p_gas = preds_modelo_actual
+
+    # 2. CÁLCULO EN CALIENTE (Garantiza reproducibilidad absoluta sin datos fijos)
+    error_abs = np.abs(y_real_gas - y_p_gas)
+    r2_dinamico = r2_score(y_real_gas, y_p_gas)
+    
+    zo = error_abs <= umbral_tolerancia
+    zd = error_abs > umbral_tolerancia
+    porcentaje_acierto_dinamico = (zo.sum() / len(y_real_gas)) * 100
+    
+    # 3. Renderizado segregado basado en los cálculos actuales
+    ax.scatter(y_real_gas[zo], y_p_gas[zo], color='#2F855A', alpha=0.5, 
+               label=f'Zona Óptima ({porcentaje_acierto_dinamico:.1f}%)')
+    ax.scatter(y_real_gas[zd], y_p_gas[zd], color='#C53030', alpha=0.5, 
+               label='Desviación / Fuera Umbral')
+    
+    # Línea base de simetría ideal y colchón de tolerancia física del proceso
+    lim_inf, lim_sup = min(y_real_gas), max(y_real_gas)
+    ax.plot([lim_inf, lim_sup], [lim_inf, lim_sup], color='black', linestyle='--')
+    ax.fill_between([lim_inf, lim_sup], [lim_inf - umbral_tolerancia, lim_sup - umbral_tolerancia], 
+                    [lim_inf + umbral_tolerancia, lim_sup + umbral_tolerancia], color='#2F855A', alpha=0.08)
+    
+    # Títulos dinámicos mapeados directamente desde los objetos de Scikit-Learn
+    ax.set_title(f"Modelo: {name} (R² O₂: {r2_dinamico:.3f})", fontweight='bold')
+    ax.set_xlabel("Valor Real de %O2")
+    ax.set_ylabel("Predicción de %O2")
+    ax.legend(loc="upper left")
+    
+fig_panel.suptitle("Panel Comparativo de Matrices de Control por Umbrales ($\pm$0.35% $O_2$)", fontsize=16, fontweight='bold', y=0.96)
+plt.tight_layout(rect=[0.03, 0.03, 0.97, 0.94])
+
+# GUARDADO SEGURO DE LA FIGURA MULTI-PANEL COMPLETE
+fig_panel.savefig(ruta_grafica_nueva + "/grafica4_panel_multi_modelo.png", dpi=300)
+plt.close(fig_panel)
+print("[MLOps] Nuevo panel 100% dinámico 'grafica4_panel_multi_modelo.png' exportado con éxito.")
+
 
 
 
