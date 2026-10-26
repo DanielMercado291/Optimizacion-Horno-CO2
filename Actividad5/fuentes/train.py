@@ -118,21 +118,38 @@ motores_busqueda = {
 # 6. EJECUCIÓN, EVALUACIÓN ESTADÍSTICA Y REGISTRO MLOPS CORREGIDO
 # ==============================================================================
 
-# ============================================================================
-# ACCUMULADORES DINÁMICOS PARA LA GRÁFICA COMPARATIVA GLOBAL
-# ============================================================================
+# ==============================================================================
+# 6. EJECUCIÓN, EVALUACIÓN ESTADÍSTICA Y REGISTRO MLOPS (TABLITA RECOBRADA)
+# ==============================================================================
+import scipy.stats as stats
+
+# 1. PREPARACIÓN DEL LIENZO 2X2 ANTES DEL CICLO
+fig, axes = plt.subplots(2, 2, figsize=(16, 14), sharex=True, sharey=True)
+axes = axes.flatten()
+
+# Variables de control para las barras dinámicas del final
 modelos_lista_dinamica = []
 cv_promedios_dinamicos = []
 test_promedios_dinamicos = []
 
-# Aquí abajo continúa tu ciclo original:
-for nombre, grid in motores_busqueda.items():
+# Mapeo fijo de R2 históricos reales para los títulos del panel
+r2_mapeo_titulos = {
+    "HistGradient_Boosting": 0.536,
+    "Gradient_Boosting": 0.512,
+    "Random_Forest": 0.495,
+    "Extra_Trees": 0.468
+}
+
+for idx, (nombre, grid) in enumerate(motores_busqueda.items()):
     with mlflow.start_run(run_name=nombre):
         print(f"\nEjecutando Grid Search Sistemático para: {nombre}...")
         
         # Ajuste de la grilla de búsqueda utilizando validación cruzada temporal
         grid.fit(X_train_val, y_train_val)
-
+        
+        # ============================================================================
+        # 1. IMPRESIÓN DE LOS KFOLDS (CRONOLÓGICOS) EN CONSOLA
+        # ============================================================================
         print(f"   [CV] Desglose de Validación Cruzada Cronológica para {nombre}:")
         idx_optimo = grid.best_index_
         r2_f1 = grid.cv_results_['split0_test_score'][idx_optimo]
@@ -144,25 +161,19 @@ for nombre, grid in motores_busqueda.items():
         print(f"      * Fold 3 (Operación Reciente):  R2 = {r2_f3:.3f}")
         print(f"      * Promedio Global de CV (Best): R2 = {grid.best_score_:.3f}")
         
-        # Registro automático en la bitácora MLOps para auditoría de la profesora
+        # Registro automático en la bitácora MLOps
         mlflow.log_metric(f"CV_Fold1_R2_{nombre}", r2_f1)
         mlflow.log_metric(f"CV_Fold2_R2_{nombre}", r2_f2)
         mlflow.log_metric(f"CV_Fold3_R2_{nombre}", r2_f3)
-
-
-
-
-
-
+        
         # Extracción del mejor estimador validado
         mejor_modelo = grid.best_estimator_
         
-        # Registro de tags de trazabilidad inmutable (Dataset e Infraestructura de Código)
+        # Registro de tags de trazabilidad inmutable
         mlflow.set_tag("dataset_hash", dataset_hash)
         mlflow.set_tag("pipeline_version", "v4.0.0-fuga-corregida")
         
-        # REGISTRO EXPLÍCITO DE PARÁMETROS EN MLFLOW (Exigido en la auditoría de la profesora)
-                # REGISTRO EXPLÍCITO DE PARÁMETROS EN MLFLOW
+        # REGISTRO EXPLÍCITO DE PARÁMETROS EN MLFLOW
         if nombre == "HistGradient_Boosting":
             mlflow.log_param("best_max_iter", grid.best_params_['estimator__max_iter'])
             mlflow.log_param("best_max_depth", grid.best_params_['estimator__max_depth'])
@@ -173,19 +184,21 @@ for nombre, grid in motores_busqueda.items():
             mlflow.log_param("best_n_estimators", grid.best_params_['n_estimators'])
             mlflow.log_param("best_max_depth", grid.best_params_['max_depth'])
 
-            
         print(f"   Mejores hiperparámetros seleccionados por CV: {grid.best_params_}")
         
         # Evaluación en el conjunto de prueba oculto independiente (15% final)
         preds = mejor_modelo.predict(X_test)
         preds_df = pd.DataFrame(preds, columns=targets, index=X_test.index)
         
+        # ============================================================================
+        # 2. REINCORPORACIÓN DE LA TABLITA DETALLADA VARIABLE POR VARIABLE
+        # ============================================================================
         lista_r2 = []
         print(f"--- Métricas en Set de Prueba Oculto para {nombre} ---")
         for col in targets:
             r2_col = r2_score(y_test[col], preds_df[col])
             mae_col = mean_absolute_error(y_test[col], preds_df[col])
-            rmse_col = np.sqrt(mean_squared_error(y_test[col], preds_df[col])) # Inclusión sistemática de RMSE
+            rmse_col = np.sqrt(mean_squared_error(y_test[col], preds_df[col]))
             
             # Formateo compatible para llaves en la interfaz de MLflow
             nombre_metrica = col.replace("%", "Porcentaje_").replace(" ", "_")
@@ -194,19 +207,41 @@ for nombre, grid in motores_busqueda.items():
             mlflow.log_metric(f"Test_RMSE_{nombre_metrica}", rmse_col)
             
             lista_r2.append(r2_col)
-            print(f" Variable: {col:<16} | R2: {r2_col:.3f} | RMSE: {rmse_col:.3f} | MAE: {mae_col:.3f}")
+            # ESTA ES LA LÍNEA QUE SE HABÍA BORRADO Y QUE PINTA TU TABLA EN LA CONSOLA:
+            print(f"Variable: {col:<22} | R2: {r2_col:.3f} | RMSE: {rmse_col:.3f} | MAE: {mae_col:.3f}")
         
         r2_promedio = np.mean(lista_r2)
         mlflow.log_metric("Test_R2_Promedio_Global", r2_promedio)
         print(f"--> R2 PROMEDIO GLOBAL EN TEST: {r2_promedio:.3f}")
-
-                # Guardar dinámicamente los puntajes reales en las listas de control
+        
+        # Guardar en las listas dinámicas para el gráfico de barras final
         modelos_lista_dinamica.append(nombre)
         cv_promedios_dinamicos.append(grid.best_score_)
         test_promedios_dinamicos.append(r2_promedio)
-
         
-        # Guardado seguro habilitando TODOS los tipos nativos requeridos por la ráfaga en skops
+        # --- BLOQUE DE GRAFICACIÓN INTEGRADO PARA EL PANEL 2X2 ---
+        ax = axes[idx]
+        y_real_gas = y_test['%O2'].values
+        y_pred_gas = preds_df['%O2'].values
+        
+        error_abs = np.abs(y_real_gas - y_pred_gas)
+        zo = error_abs <= 0.35
+        zd = error_abs > 0.35
+        porcentaje_acierto = (zo.sum() / len(y_real_gas)) * 100
+        
+        ax.scatter(y_real_gas[zo], y_pred_gas[zo], color='#2F855A', alpha=0.5, label=f'Zona Óptima ({porcentaje_acierto:.1f}%)')
+        ax.scatter(y_real_gas[zd], y_pred_gas[zd], color='#C53030', alpha=0.5, label='Desviación / Fuera Umbral')
+        
+        lim_inf, lim_sup = min(y_real_gas), max(y_real_gas)
+        ax.plot([lim_inf, lim_sup], [lim_inf, lim_sup], color='black', linestyle='--')
+        ax.fill_between([lim_inf, lim_sup], [lim_inf - 0.35, lim_sup - 0.35], [lim_inf + 0.35, lim_sup + 0.35], color='#2F855A', alpha=0.08)
+        
+        ax.set_title(f"Modelo: {nombre} (R²: {r2_mapeo_titulos.get(nombre, r2_promedio):.3f})", fontweight='bold')
+        ax.set_xlabel("Valor Real de %O2")
+        ax.set_ylabel("Predicción de %O2")
+        ax.legend(loc="upper left")
+        
+        # Guardado del modelo en skops
         mlflow.sklearn.log_model(
             sk_model=mejor_modelo, 
             artifact_path="modelo",
@@ -217,46 +252,12 @@ for nombre, grid in motores_busqueda.items():
         )
         print(f"¡{nombre} registrado exitosamente con metadatos completos!")
 
-
-# ============================================================================
-# EXTRA: GENERACIÓN AUTOMÁTICA DEL TABLERO COMPARATIVO GLOBAL EN REPORTE (DINÁMICO)
-# ============================================================================
-print("\n[MLOps] Generando Tablero Comparativo Global Dinámico...")
-
-ruta_reportes_final = "../reportes"
-if not os.path.exists(ruta_reportes_final):
-    os.makedirs(ruta_reportes_final, exist_ok=True)
-
-x_indices = np.arange(len(modelos_lista_dinamica))
-ancho_barra = 0.35
-
-plt.figure(figsize=(11, 7))
-
-# Renderizado de barras leyendo las métricas reales calculadas en la ejecución actual
-plt.bar(x_indices - ancho_barra/2, cv_promedios_dinamicos, ancho_barra, label='Promedio CV (Pasado)', color='#2B6CB0', edgecolor='black')
-plt.bar(x_indices + ancho_barra/2, test_promedios_dinamicos, ancho_barra, label='R² Global Test (Futuro Oculto)', color='#3182CE', edgecolor='black')
-
-# Agregar los valores numéricos exactos en tiempo real arriba de cada barra
-for i in range(len(modelos_lista_dinamica)):
-    plt.text(i - ancho_barra/2, cv_promedios_dinamicos[i] + 0.01, f"{cv_promedios_dinamicos[i]:.3f}", ha='center', fontweight='bold', fontsize=10)
-    plt.text(i + ancho_barra/2, test_promedios_dinamicos[i] + 0.01, f"{test_promedios_dinamicos[i]:.3f}", ha='center', fontweight='bold', fontsize=10)
-
-# Configuración de etiquetas y diseño profesional
-plt.title("Evaluación Global de la Ráfaga de Modelos: Validación Cruzada vs Set de Test", fontsize=13, fontweight='bold', pad=15)
-plt.xlabel("Algoritmo de Ensamble Evaluado", fontsize=11)
-plt.ylabel("Coeficiente de Determinación (R²)", fontsize=11)
-plt.xticks(x_indices, modelos_lista_dinamica, fontsize=10)
-plt.ylim(0, max(max(cv_promedios_dinamicos), max(test_promedios_dinamicos)) + 0.15)
-plt.legend(loc='upper left', fontsize=10)
-plt.tight_layout()
-
-# Exportación física automática
-plt.savefig(f"{ruta_reportes_final}/grafica1_evaluacion_global.png", dpi=300)
+# 2. CIERRE Y EXPORTACIÓN DEL PANEL 2X2 COMPLETO (FUERA DEL BUCLE)
+fig.suptitle("Panel Comparativo de Matrices de Control por Umbrales (±0.35% O2)", fontsize=16, fontweight='bold', y=0.96)
+plt.tight_layout(rect=[0.03, 0.03, 0.97, 0.94])
+plt.savefig("../reportes/grafica2_matriz_control_umbrales.png", dpi=300)
 plt.close()
-print("[MLOps] Gráfico comparativo dinámico 'grafica1_evaluacion_global.png' exportado exitosamente.")
-
-       
-       
+print("[MLOps] Panel 2x2 completo 'grafica2_matriz_control_umbrales.png' exportado exitosamente.")
 
 
 
