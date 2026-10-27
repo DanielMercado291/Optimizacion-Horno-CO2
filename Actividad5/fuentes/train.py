@@ -12,13 +12,13 @@ from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 
 # ==============================================================================
-# 1. INFRAESTRUCTURA DE GOBERNANZA (MLFLOW & SQLITE)
+# INFRAESTRUCTURA DE GOBERNANZA (MLFLOW & SQLITE)
 # ==============================================================================
 mlflow.set_tracking_uri("sqlite:///../../mlflow_horno.db")
 mlflow.set_experiment("Optimizacion_Horno_Alineado_Rubrica")
 
 # ==============================================================================
-# 2. CARGA, AUDITORÍA Y LIMPIEZA CONSOLIDADA DEL DATASET
+# CARGA, AUDITORÍA Y LIMPIEZA CONSOLIDADA DEL DATASET
 # ==============================================================================
 ruta_csv = "../datos/datos_limp/horno_limpio.csv"
 df_raw = pd.read_csv(ruta_csv)
@@ -30,7 +30,7 @@ df = df_raw.drop_duplicates().dropna().copy()
 df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
 df = df.set_index('Fecha').sort_index()
 
-# Filtros operativos estrictos para estados estables del horno CEMEX Planta Monterrey
+# Filtros operativos estrictos para estados estables del horno 
 df = df[
     (df['Alimentacion'] > 50) & 
     (df['Potencia Motor'] > 80) & 
@@ -46,13 +46,13 @@ with open(ruta_csv, "rb") as f:
     dataset_hash = hashlib.sha256(f.read()).hexdigest()
 
 # ==============================================================================
-# 3. INGENIERÍA DE VARIABLES Y CORRECCIÓN DE LA FUGA DE INFORMACIÓN
+#  VARIABLES Y CORRECCIÓN DE MOTOR COMO VARIABLE DE PROCESO
 # ==============================================================================
 # Variables operativas de control que sirven como predictores puros
 cols_operativas = ['Alimentacion', 'VTI Precalentador', 'VTI Enfriador', 'Flujo de Carbon quemador', 'Flujo Carbon Calcinador']
 
 # Generamos Lags únicamente de las variables operativas y de los gases históricos
-# NOTA EXPLICATIVA: Se elimina por completo 'Potencia Motor' de las variables de entrada actuales.
+# Se elimina por completo 'Potencia Motor' de las variables de entrada actuales.
 # Esto erradica la fuga de información, obligando al modelo a predecir la potencia basándose en leyes operativas.
 for col in cols_operativas + ['%Gases NO', '%Gases SO2', '%CO', '%O2']:
     df[f'{col}_lag1'] = df[col].shift(1)
@@ -77,7 +77,7 @@ X = df[features]
 y = df[targets]
 
 # ==============================================================================
-# 4. REPARTICIÓN CRONOLÓGICA CIENTÍFICA POR BLOQUES
+# REPARTICIÓN CRONOLÓGICA PARA VALIDACION CRUZADA
 # ==============================================================================
 n = len(df)
 val_end = int(n * 0.85)
@@ -89,7 +89,7 @@ X_test, y_test = X.iloc[val_end:], y.iloc[val_end:]
 tscv = TimeSeriesSplit(n_splits=3)
 
 # ==============================================================================
-# 5. RÁFAGA DE ENTRENAMIENTO CON BÚSQUEDA SISTEMÁTICA DE HIPERPARÁMETROS (GRIDSEARCH)
+# ENTRENAMIENTO CON BÚSQUEDA SISTEMÁTICA DE HIPERPARÁMETROS GRIDSEARCH
 # ==============================================================================
 motores_busqueda = {
     "Random_Forest": GridSearchCV(
@@ -114,12 +114,10 @@ motores_busqueda = {
     )
 }
 
-# ==============================================================================
-# 6. EJECUCIÓN, EVALUACIÓN ESTADÍSTICA Y REGISTRO MLOPS CORREGIDO
-# ==============================================================================
+
 
 # ==============================================================================
-# 6. EJECUCIÓN, EVALUACIÓN ESTADÍSTICA Y REGISTRO MLOPS (100% DINÁMICO)
+# EJECUCIÓN, EVALUACIÓN ESTADÍSTICA Y REGISTRO MLOPS 
 # ==============================================================================
 import scipy.stats as stats
 
@@ -142,7 +140,7 @@ for idx, (nombre, grid) in enumerate(motores_busqueda.items()):
         grid.fit(X_train_val, y_train_val)
         
         # ============================================================================
-        # 1. IMPRESIÓN DE LOS KFOLDS (CRONOLÓGICOS) EN CONSOLA
+        # KFOLDS DINAMICOS EN CONSOLA
         # ============================================================================
         print(f"   [CV] Desglose de Validación Cruzada Cronológica para {nombre}:")
         idx_optimo = grid.best_index_
@@ -185,7 +183,7 @@ for idx, (nombre, grid) in enumerate(motores_busqueda.items()):
         preds_df = pd.DataFrame(preds, columns=targets, index=X_test.index)
         
         # ============================================================================
-        # 2. IMPRESIÓN DETALLADA VARIABLE POR VARIABLE Y EXTRACCIÓN DE VALORES REALES
+        # IMPRESIÓN DETALLADA DE VARIABLES
         # ============================================================================
         lista_r2 = []
         r2_especifico_o2 = 0.0 # Variable local para capturar el R2 dinámico del Oxígeno
@@ -217,7 +215,7 @@ for idx, (nombre, grid) in enumerate(motores_busqueda.items()):
         cv_promedios_dinamicos.append(grid.best_score_)
         test_promedios_dinamicos.append(r2_promedio)
         
-        # --- BLOQUE DE GRAFICACIÓN 100% DINÁMICO PARA EL PANEL 2X2 ---
+        # --- BLOQUE DE GRAFICACIÓN  PARA EL PANEL ---
         ax = axes[idx]
         y_real_gas = y_test['%O2'].values
         y_pred_gas = preds_df['%O2'].values
@@ -234,7 +232,7 @@ for idx, (nombre, grid) in enumerate(motores_busqueda.items()):
         ax.plot([lim_inf, lim_sup], [lim_inf, lim_sup], color='black', linestyle='--')
         ax.fill_between([lim_inf, lim_sup], [lim_inf - 0.35, lim_sup - 0.35], [lim_inf + 0.35, lim_sup + 0.35], color='#2F855A', alpha=0.08)
         
-        # EL TÍTULO AHORA USA EL R2 CALCULADO EN TIEMPO REAL PARA ESTA VARIABLE
+        # R2 CALCULADO EN TIEMPO REAL PARA ESTA VARIABLE
         ax.set_title(f"Modelo: {nombre} (R² O₂: {r2_especifico_o2:.3f})", fontweight='bold')
         ax.set_xlabel("Valor Real de %O2")
         ax.set_ylabel("Predicción de %O2")
@@ -251,7 +249,7 @@ for idx, (nombre, grid) in enumerate(motores_busqueda.items()):
         )
         print(f"¡{nombre} registrado exitosamente con metadatos completos!")
 
-# 2. CIERRE Y EXPORTACIÓN DEL PANEL 2X2 UTILIZANDO 'FIG.SAVEFIG' PARA EVALUACIÓN MULTI-PANEL
+# 2. EXPORTACIÓN 
 fig.suptitle("Panel Comparativo de Matrices de Control por Umbrales (±0.35% O2)", fontsize=16, fontweight='bold', y=0.96)
 plt.tight_layout(rect=[0.03, 0.03, 0.97, 0.94])
 
@@ -262,7 +260,7 @@ print("[MLOps] Panel 2x2 reproducible guardado exitosamente en la carpeta de rep
 
 
 # ============================================================================
-# EXTRA: GENERACIÓN DEL TABLERO COMPARATIVO 2X2 DE MATRICES DE CONTROL (NUEVO)
+# GENERACIÓN DEL TABLERO COMPARATIVO 
 # ============================================================================
 
 print("\n[MLOps] Generando el nuevo Panel Comparativo 2x2 Dinámico y Reproducible...")
@@ -295,7 +293,7 @@ for idx, (name, grid) in enumerate(motores_busqueda.items()):
     else:
         y_p_gas = preds_modelo_actual
 
-    # 2. CÁLCULO EN CALIENTE (Garantiza reproducibilidad absoluta sin datos fijos)
+    # CÁLCULO 
     error_abs = np.abs(y_real_gas - y_p_gas)
     r2_dinamico = r2_score(y_real_gas, y_p_gas)
     
@@ -303,7 +301,7 @@ for idx, (name, grid) in enumerate(motores_busqueda.items()):
     zd = error_abs > umbral_tolerancia
     porcentaje_acierto_dinamico = (zo.sum() / len(y_real_gas)) * 100
     
-    # 3. Renderizado segregado basado en los cálculos actuales
+    # Renderizado segregado basado en los cálculos actuales
     ax.scatter(y_real_gas[zo], y_p_gas[zo], color='#2F855A', alpha=0.5, 
                label=f'Zona Óptima ({porcentaje_acierto_dinamico:.1f}%)')
     ax.scatter(y_real_gas[zd], y_p_gas[zd], color='#C53030', alpha=0.5, 
@@ -324,7 +322,7 @@ for idx, (name, grid) in enumerate(motores_busqueda.items()):
 fig_panel.suptitle("Panel Comparativo de Matrices de Control por Umbrales ($\pm$0.35% $O_2$)", fontsize=16, fontweight='bold', y=0.96)
 plt.tight_layout(rect=[0.03, 0.03, 0.97, 0.94])
 
-# GUARDADO SEGURO DE LA FIGURA MULTI-PANEL COMPLETE
+# GUARDADO SEGURO 
 fig_panel.savefig(ruta_grafica_nueva + "/grafica4_panel_multi_modelo.png", dpi=300)
 plt.close(fig_panel)
 print("[MLOps] Nuevo panel 100% dinámico 'grafica4_panel_multi_modelo.png' exportado con éxito.")
@@ -333,7 +331,7 @@ print("[MLOps] Nuevo panel 100% dinámico 'grafica4_panel_multi_modelo.png' expo
 
 
 # ============================================================================
-# 7. GENERACIÓN DEL TABLERO VISUAL DE EVALUACIÓN (AGREGAR AL FINAL DE TU train.py)
+# GENERACIÓN DEL TABLERO VISUAL DE EVALUACIÓN 
 # ============================================================================
 import os
 
@@ -401,54 +399,43 @@ if col_interes in targets:
 
 
     # ============================================================================
-# 8. CÁLCULO DE LA PRUEBA ESTADÍSTICA INFERENCIAL Z (DATOS REALES DEL HORNO)
+# CÁLCULO DE LA PRUEBA ESTADÍSTICA INFERENCIAL Z 
 # ============================================================================
 import scipy.stats as stats
 
-print("\n[Prueba A/B] Calculando significancia estadística inferencial Z...")
+print("\n[Prueba A/B] Calculando significancia estadística inferencial Z Real...")
 
 col_evaluacion = '%O2'
 if col_evaluacion in targets:
-    # 1. Recuperamos tus vectores de prueba verdaderos y tus predicciones reales
     y_verdadero_real = y_test[col_evaluacion].values
     y_predicho_real = preds_df[col_evaluacion].values
     
-    # 2. Definición del tamaño de la muestra (Población de horas de operación real)
-    n_B = len(y_verdadero_real) # Horas evaluadas con tu modelo HistGradient_Boosting
-    n_A = n_B                   # Comparamos contra la misma cantidad de horas del baseline
+    n_B = len(y_verdadero_real) 
+    n_A = n_B                   
     
-    # 3. Contamos los éxitos reales (Horas dentro de la banda de tolerancia operativa de +-0.35%)
-    # Para el Modelo B (Tu HistGradient_Boosting ganador)
+    # Éxitos del Modelo B (Tu HistGradient_Boosting real: Errores individuales <= 0.35)
     errores_B = np.abs(y_verdadero_real - y_predicho_real)
     exitos_B = np.sum(errores_B <= 0.35)
     
-    # Para el Modelo A (Baseline Operativo / Lazo Abierto Tradicional)
-    # Ajustamos el ruido a 2.0 para reflejar la dispersión real del control manual histórico
-    np.random.seed(42)
-    errores_A = np.abs(y_verdadero_real - (y_verdadero_real + np.random.normal(0, 2.0, n_A)))
-    exitos_A = np.sum(errores_A <= 0.35)
+    # Éxitos del Modelo A (Baseline Operativo Real: Comparación contra la media histórica cruda del pasado)
+    media_entrenamiento_o2 = np.mean(y_train_val[col_evaluacion].values)
+    errores_A_real = np.abs(y_verdadero_real - media_entrenamiento_o2)
+    exitos_A = np.sum(errores_A_real <= 0.35)
     
-    # 4. PASO 1 DEL PDF: Cálculo de las proporciones de conversión reales
+    # Cálculo de proporciones reales de éxito
     p_A = exitos_A / n_A
     p_B = exitos_B / n_B
     diferencia_observada = p_B - p_A
     
-    # 5. PASO 3 DEL PDF: Cálculo de la proporción combinada
     p_combinada = (exitos_A + exitos_B) / (n_A + n_B)
-    
-    # 6. PASO 4 DEL PDF: Cálculo del error estándar (SE)
     SE_real = np.sqrt(p_combinada * (1 - p_combinada) * ((1 / n_A) + (1 / n_B)))
-    
-    # 7. PASO 5 DEL PDF: Cálculo del estadístico Z calculado
     Z_calculado = diferencia_observada / SE_real
-    
-    # 8. PASO 6 Y 7: Determinación de p-value y toma de decisión académica
-    z_critico = 1.96  # Para alpha = 0.05 bilateral
+    z_critico = 1.96  
     
     print("-" * 60)
-    print(f"RESULTADOS REALES DE LA PRUEBA Z (Mapeo Completo Rúbrica):")
+    print(f"RESULTADOS REALES DE LA PRUEBA Z (Gobernanza Transparente):")
     print(f"Muestra evaluada (n_A = n_B): {n_B} horas de operación del horno.")
-    print(f"Éxitos Modelo A (Control Manual): {exitos_A} horas estables (p_A = {p_A:.3f})")
+    print(f"Éxitos Modelo A (Baseline de la Media): {exitos_A} horas estables (p_A = {p_A:.3f})")
     print(f"Éxitos Modelo B (Lazo Cerrado HGB): {exitos_B} horas estables (p_B = {p_B:.3f})")
     print(f"Diferencia real observada: {diferencia_observada:.3f}")
     print(f"Error Estándar (SE): {SE_real:.4f}")
@@ -456,20 +443,16 @@ if col_evaluacion in targets:
     print(f"Estadístico Z crítico: +-1.96")
     
     if np.abs(Z_calculado) >= z_critico:
-        print("DECISIÓN: Dado que el valor de Z calculado es mayor o igual al crítico, la diferencia")
-        print("es ESTADÍSTICAMENTE SIGNIFICATIVA al 95%. Se RECHAZA la Hipótesis Nula (H0).")
+        print("DECISIÓN: La diferencia es ESTADÍSTICAMENTE SIGNIFICATIVA al 95%. Se RECHAZA H0.")
         print("El Modelo B (HistGradient_Boosting) es la opción óptima para producción.")
     else:
         print("DECISIÓN: La diferencia no superó el umbral crítico. No se rechaza H0.")
     print("-" * 60)
     
-    # Guardamos los resultados numéricos en una nota de MLflow para auditoría MLOps
-    mlflow.log_param("AB_Test_Z_Calculado", float(Z_calculado))
-    mlflow.log_param("AB_Test_Proporcion_HGB", float(p_B))
-
+    mlflow.log_param("AB_Test_Z_Calculado_Real", float(Z_calculado))
 
 # ============================================================================
-# EXTRA: COMPARATIVA REAL DE OPERACIÓN (PLANTA MANUAL VS MODELO MLOps)
+# COMPARATIVA REAL DE OPERACIÓN 
 # ============================================================================
 print("\n" + "="*95)
 print(f"{'EVALUACIÓN DE IMPACTO: OPERACIÓN MANUAL DE PLANTA VS PREDICCIÓN MLOps':^95}")
