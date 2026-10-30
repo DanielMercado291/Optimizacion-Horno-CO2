@@ -1,0 +1,15 @@
+# Motores matemáticos fijos del entrenamiento original
+numpy==2.0.0
+scikit-learn==1.5.0
+scipy==1.13.0
+
+# Librerías operativas (Rango libre para que Docker resuelva el conflicto solo)
+pandas
+mlflow
+skops
+matplotlib
+seaborn
+fastapi
+uvicorn
+
+
