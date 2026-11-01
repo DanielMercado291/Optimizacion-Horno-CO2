@@ -238,6 +238,30 @@ for idx, (nombre, grid) in enumerate(motores_busqueda.items()):
         ax.set_ylabel("Predicción de %O2")
         ax.legend(loc="upper left")
         
+
+        # ==========================================
+        # CONTROL DE GUARDADO MLOPS PARA API (PICKLE TRADICIONAL)
+        # ==========================================
+        # Guardamos el archivo físico que app.py y Docker van a consumir directamente
+        import pickle
+        
+        # Guardado en la raíz para el contenedor Docker
+        with open("model.pkl", "wb") as f:
+            pickle.dump(mejor_modelo, f)
+            
+        # Respaldo en la ruta absoluta de Windows para asegurar persistencia local
+        try:
+            ruta_windows = r"C:\Users\damercado\Downloads\model.pkl"
+            with open(ruta_windows, "wb") as f:
+                pickle.dump(mejor_modelo, f)
+            print(f"[MLOps] '{nombre}' exportado exitosamente a Pickle local y Windows.")
+        except Exception as e:
+            print(f"[Aviso] No se pudo guardar respaldo en Windows, pero local model.pkl listo: {e}")
+
+        
+
+
+
         # Guardado del modelo en skops
         mlflow.sklearn.log_model(
             sk_model=mejor_modelo, 
@@ -479,3 +503,34 @@ for col in targets:
 
 print("="*95)
 print("[MLOps] Comparativa de operación real concluida con éxito.")
+
+# ============================================================
+# GUARDADO LIMPIO Y DEFINITIVO DEL MODELO GANADOR
+# ============================================================
+import pickle
+import os
+
+# Forzamos el modelo ganador (HistGradient_Boosting)
+modelo_final = motores_busqueda["HistGradient_Boosting"].best_estimator_
+
+# Creamos la carpeta oficial
+os.makedirs("model", exist_ok=True)
+
+# Guardamos ÚNICAMENTE aquí (esta es la ruta que Docker va a usar)
+ruta_oficial = os.path.join("model", "model.pkl")
+with open(ruta_oficial, "wb") as f:
+    pickle.dump(modelo_final, f)
+
+print("="*60)
+print("✅ MODELO GUARDADO CORRECTAMENTE")
+print(f"Ruta: {os.path.abspath(ruta_oficial)}")
+print(f"Tipo de modelo: {type(modelo_final)}")
+print(f"Features que espera: {modelo_final.n_features_in_}")
+print("="*60)
+
+import pickle
+with open("model/model.pkl", "rb") as f:
+    m = pickle.load(f)
+
+print(type(m))
+print("Features esperadas:", m.n_features_in_)   # Tiene que decir 19
