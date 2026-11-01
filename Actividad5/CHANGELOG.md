@@ -2,6 +2,20 @@
 
 Todos los cambios notables y mejoras estructurales aplicadas al pipeline de datos se registran cronológicamente en esta bitácora de gobernanza.
 
+## [v5.0.0-despliegue] - 2026-10-31
+
+### Añadido
+* **API REST con FastAPI:** Implementación de endpoint `/predict` que recibe 19 variables y retorna predicción multi-salida.
+* **Contenedorización:** Creación de Dockerfile funcional que empaqueta la API + modelo + dependencias.
+* **Despliegue en la Nube:** Publicación del servicio en Render.com (PaaS) con URL pública.
+* **Documentación de Despliegue:** Creación de `manual_despliegue.md` y `validacion_pruebas.md`.
+* **Pruebas de Integración:** Archivo `tests/test_api.py` con casos normales y extremos.
+* **Estructura del Repositorio:** Organización de carpetas (`src/`, `model/`, `docs/`, `tests/`) según estándares de entrega.
+
+### Corregido
+* **Modelo en Producción:** Se forzó el guardado del modelo ganador (HistGradientBoosting con 19 features) para evitar carga de modelos anteriores.
+* **Consistencia de Features:** Validación estricta de que la API reciba exactamente 19 variables de entrada.
+
 ## [v4.2.0-produccion-limpia] - 2026-10-26
 ###  Corrección y Limpieza Analítica Definitiva (Sección 8)
 *   **Remoción de Ruido Artificial:** Se eliminó por completo la inyección de ruido aleatorio Gaussiano (`np.random.normal(0, 2.0)`) que simulaba de forma artificial el comportamiento del Grupo A.
