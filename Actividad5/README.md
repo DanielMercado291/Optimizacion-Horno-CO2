@@ -79,6 +79,19 @@ POST /predict
 - Manual de Despliegue → docs/manual_despliegue.md
 - Validación y Pruebas → docs/validacion_pruebas.md
 
+## Monitoreo y Simulación de Incidentes (Actividad 8)
+
+Ejecutar monitoreo:
+python monitoreo.py
+
+Ejecutar simulación de incidentes:
+python simulacion_incidentes.py
+
+Ver resultados en MLflow:
+mlflow ui --backend-store-uri sqlite:///mlflow_horno.db
+
+
+
 Autor: Daniel Mercado  
 Proyecto: Optimización Horno CO₂ - CEMEX Planta Monterrey  
 Fecha: Octubre 2026
