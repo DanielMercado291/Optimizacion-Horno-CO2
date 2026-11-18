@@ -1,0 +1,7 @@
+
+Pasos ejecutados del Runbook 1 (Alta tasa de errores):
+1. Se verificó el estado del servicio en Render.
+2. Se revisaron los logs de la aplicación en busca de errores.
+3. Se confirmó una tasa de error del 4%.
+4. Se documentó la acción recomendada: redespliegue o rollback si el problema persiste.
+5. Se registró el incidente y las acciones tomadas.
