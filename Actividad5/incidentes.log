@@ -1,0 +1,23 @@
+2026-11-18 10:23:51,365 - INFO - INCIDENTE 1 | Tipo: Alta tasa de errores | Tasa: 4.0% | Severidad: Crítica
+2026-11-18 10:23:51,365 - INFO - Acción: Se revisaron logs de Render y se documentó procedimiento de redespliegue/rollback
+2026-11-18 10:23:51,421 - INFO - INCIDENTE 2 | Tipo: Data Drift %O2 | Media inicial: 3.23 | Media reciente: 5.08 | Severidad: Alta
+2026-11-18 10:23:51,421 - INFO - Acción: Se analizó gráfica y datos. Se recomendó evaluación para posible reentrenamiento
+2026-11-18 11:58:01,796 - INFO - INCIDENTE 1 | Tipo: Alta tasa de errores | Tasa: 4.0% | Severidad: Crítica
+2026-11-18 11:58:01,797 - INFO - 
+Pasos ejecutados del Runbook 1 (Alta tasa de errores):
+1. Se verificó el estado del servicio en Render.
+2. Se revisaron los logs de la aplicación en busca de errores.
+3. Se confirmó una tasa de error del 4%.
+4. Se documentó la acción recomendada: redespliegue o rollback si el problema persiste.
+5. Se registró el incidente y las acciones tomadas.
+
+2026-11-18 11:58:01,886 - INFO - INCIDENTE 2 | Tipo: Data Drift %O2 | Media inicial: 3.23 | Media reciente: 5.08
+2026-11-18 11:58:01,886 - INFO - 
+Pasos ejecutados del Runbook 3 (Data Drift):
+1. Se confirmó el cambio en la media de %O\u2082 (de 3.23% a 5.08%).
+2. Se revisó la gráfica de %O\u2082 para validar visualmente el drift.
+3. Se analizaron los datos recientes del periodo.
+4. Se documentó la recomendación de revisar condiciones operativas del horno.
+5. Se recomendó evaluar un posible reentrenamiento del modelo.
+6. Se registró el incidente y las acciones tomadas.
+
